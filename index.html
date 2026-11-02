@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Earth's 4.2 billion years as an interactive spiral, 1 pixel per millennium, with a 100x magnified strip for the Common Era.">
+<title>Spiral of Deep Time</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+/* Layout: a one-screen instrument. Control bar on top, the spiral fills the stage below it.
+   Info card lower-left, zoom buttons lower-right, scale readout top-left. */
+:root{
+  --ink:#0a0f1f;
+  --panel:#111830;
+  --panel-glass:rgba(17,24,48,.9);
+  --rule:#26304f;
+  --line:#f1f4fa;
+  --gold:#f2b53a;
+  --text:#e6eaf4;
+  --muted:#93a0c0;
+  --font-display:"Instrument Serif",Georgia,"Times New Roman",serif;
+  --font-body:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-data:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{display:flex;flex-direction:column;background:var(--ink);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.45;overflow:hidden;-webkit-text-size-adjust:100%}
+
+.bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 24px;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--rule);background:var(--ink)}
+.titlebox{display:flex;flex-direction:column;gap:5px;min-width:0}
+h1{margin:0;font:400 30px/1 var(--font-display);letter-spacing:.005em;text-wrap:balance}
+.sub{margin:0;font:400 11px/1.3 var(--font-data);color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;margin-left:auto;min-width:0;max-width:100%}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0;max-width:100%}
+label{font:500 10.5px/1 var(--font-data);color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+select,button{font:500 14px/1.2 var(--font-body);color:var(--text);background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:8px 11px;min-height:38px}
+select{width:300px;max-width:100%}
+button{cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:active{background:var(--rule)}
+button:disabled{opacity:.4;cursor:default}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+#zoomPeriod{border-color:var(--gold);color:var(--gold)}
+
+.stage{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none;cursor:grab;outline-offset:-2px}
+.stage.drag{cursor:grabbing}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#over{pointer-events:none}
+
+.hud{position:absolute;top:12px;left:max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:5px;max-width:calc(100% - 32px);font:400 11px/1.4 var(--font-data);color:var(--muted);pointer-events:none}
+.scalebar{display:flex;align-items:center;gap:8px;color:var(--text)}
+.scalebar i{display:block;height:6px;width:60px;border:1px solid var(--text);border-top:0}
+.point{min-height:1.4em;color:var(--text)}
+
+.card{position:absolute;left:max(16px,env(safe-area-inset-left,0px));right:calc(max(16px,env(safe-area-inset-right,0px)) + 52px);bottom:16px;max-width:380px;padding:12px 14px 13px;background:var(--panel-glass);border:1px solid var(--rule);border-radius:4px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);cursor:default}
+.kicker{margin:0 0 6px;font:500 10.5px/1 var(--font-data);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.card h2{margin:0 0 3px;font:400 28px/1.05 var(--font-display);color:var(--gold);text-wrap:balance}
+.range{margin:0 0 10px;font:400 12.5px/1.4 var(--font-data);color:var(--text)}
+.stats{margin:0;display:flex;flex-wrap:wrap;gap:8px 20px}
+.stat dt{font:500 10px/1.2 var(--font-data);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat dd{margin:3px 0 0;font:500 13px/1.3 var(--font-data);font-variant-numeric:tabular-nums}
+.note{margin:11px 0 0;color:var(--muted);font-size:13px;max-width:60ch}
+.card.none h2{color:var(--text)}
+.card.none .stats,.card.none .note{display:none}
+.card.none .range{margin:0;color:var(--muted)}
+
+.zoomctl{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:16px;display:flex;flex-direction:column;gap:6px}
+.zoomctl button{width:40px;height:40px;padding:0;font-size:20px;line-height:1;background:var(--panel-glass)}
+.mag{position:absolute;left:0;top:0;z-index:5;display:flex;align-items:center;gap:6px;height:28px;min-height:0;padding:0 9px;font:500 12px/1 var(--font-data);color:var(--text);background:var(--panel-glass);cursor:help}
+.mag:hover,.mag:focus-visible,.mag[aria-expanded="true"]{border-color:var(--gold);color:var(--gold)}
+.magtip{position:absolute;left:0;top:0;z-index:6;width:270px;max-width:calc(100% - 16px);padding:11px 13px 12px;background:var(--panel);border:1px solid var(--rule);border-radius:4px;font-size:13px;line-height:1.45;pointer-events:none}
+.magtip b{display:block;margin-bottom:4px;color:var(--gold);font-weight:600}
+.mag[hidden],.magtip[hidden]{display:none}
+
+.btns .quiet{background:transparent}
+
+/* Preface and help popups */
+.modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:rgba(5,8,18,.84);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.modal[hidden]{display:none}
+.sheet{position:relative;width:min(680px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:30px 32px 28px}
+.sheet .kicker{margin-bottom:10px}
+.sheet h2{margin:0 0 16px;padding-right:36px;font:400 40px/1.02 var(--font-display);text-wrap:balance}
+.sheet h3{margin:22px 0 9px;font:500 10.5px/1 var(--font-data);letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
+.sheet p{margin:0 0 12px;max-width:62ch;font-size:15px}
+.sheet .lede{font-size:16.5px}
+.sheet .fine{margin:16px 0 0;color:var(--muted);font-size:13px}
+.sheet .close{position:absolute;top:10px;right:10px;width:36px;height:36px;min-height:0;padding:0;font-size:22px;line-height:1;background:transparent;border-color:transparent}
+.sheet .close:hover{border-color:var(--rule)}
+.scale{width:100%;border-collapse:collapse;margin:4px 0 14px;font-size:13.5px}
+.scale th,.scale td{text-align:left;padding:9px 12px 9px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+.scale th{font:500 10px/1.2 var(--font-data);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.scale td:first-child{font-weight:500}
+.scale td+td{font-family:var(--font-data);font-variant-numeric:tabular-nums;font-size:12.5px}
+.scale tr:last-child td{color:var(--gold)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.actions .primary{background:var(--gold);border-color:var(--gold);color:var(--ink);font-weight:600}
+.actions .primary:hover{border-color:var(--text)}
+.help dl{margin:0;display:grid;grid-template-columns:minmax(110px,160px) 1fr;gap:10px 18px}
+.help dt{font-weight:600;font-size:14px}
+.help dd{margin:0;font-size:14px;max-width:60ch}
+kbd{display:inline-block;margin:0 1px;padding:1px 6px;font:500 12px/1.5 var(--font-data);border:1px solid var(--rule);border-bottom-width:2px;border-radius:3px;background:var(--ink)}
+.swatch{display:inline-block;width:22px;height:0;margin-right:6px;border-top:3px solid var(--line);vertical-align:middle}
+.swatch.g{margin-left:8px;border-color:var(--gold)}
+
+@media (max-width:560px){
+  .sheet{padding:24px 18px 20px}
+  .sheet h2{font-size:30px}
+  .sheet p{font-size:14.5px}
+  .sheet .lede{font-size:15.5px}
+  .help dl{grid-template-columns:1fr;gap:2px}
+  .help dd{margin-bottom:10px}
+  .scale{font-size:13px}
+  h1{font-size:25px}
+  .sub{display:none}
+  .controls{margin-left:0;width:100%}
+  select{width:100%}
+  .btns button{padding:7px 9px;font-size:13px;min-height:36px}
+  .card h2{font-size:23px}
+  .note{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+
+/* Standalone page: reset and safe-area padding that the Artifact wrapper normally supplies */
+[hidden]{display:none!important}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="titlebox">
+    <h1>Spiral of Deep Time</h1>
+    <p class="sub">4.2 billion years &middot; 1 pixel per millennium</p>
+  </div>
+  <div class="controls">
+    <div class="field">
+      <label for="period">Highlight a period</label>
+      <select id="period"></select>
+    </div>
+    <div class="btns">
+      <button id="zoomPeriod" type="button">Zoom to period</button>
+      <button id="fitAll" type="button">Whole spiral</button>
+      <button id="fitModern" type="button">Modern years</button>
+      <button id="aboutBtn" class="quiet" type="button">About</button>
+      <button id="helpBtn" class="quiet" type="button" aria-haspopup="dialog">Help</button>
+    </div>
+  </div>
+</header>
+
+<main class="stage" id="stage" tabindex="0" aria-label="Spiral timeline of Earth. Drag to pan, scroll or pinch to zoom, plus and minus keys also zoom.">
+  <canvas id="base"></canvas>
+  <canvas id="over"></canvas>
+
+  <div class="hud" aria-hidden="true">
+    <div class="scalebar"><i id="scaleBar"></i><span id="scaleText"></span></div>
+    <div>Strip from 0 AD to today: 1 px = 10 years</div>
+    <div class="point" id="pointText"></div>
+  </div>
+
+  <section class="card none" id="card" aria-live="polite">
+    <p class="kicker" id="cKick">Highlighted period</p>
+    <h2 id="cName">Nothing highlighted</h2>
+    <p class="range" id="cRange">Pick a period above to turn its stretch of the line gold.</p>
+    <dl class="stats">
+      <div class="stat"><dt>Duration</dt><dd id="cDur"></dd></div>
+      <div class="stat"><dt>Share of timeline</dt><dd id="cShare"></dd></div>
+      <div class="stat"><dt>Drawn length</dt><dd id="cLen"></dd></div>
+    </dl>
+    <p class="note" id="cNote"></p>
+  </section>
+
+  <div class="zoomctl">
+    <button id="zin" type="button" aria-label="Zoom in">+</button>
+    <button id="zout" type="button" aria-label="Zoom out">&minus;</button>
+  </div>
+
+  <button class="mag" id="mag" type="button" aria-describedby="magtip" aria-expanded="false" hidden>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l5.5 5.5"/><path d="M7.5 10h5M10 7.5v5"/></svg>
+    <span>&times;100</span>
+  </button>
+  <div class="magtip" id="magtip" role="tooltip" hidden>
+    <b>100&times; magnified</b>
+    This strip covers 0 AD to today at 1 px = 10 years. The spiral uses 1 px = 1,000 years, so everything on the strip is drawn 100 times larger.
+  </div>
+</main>
+
+<div class="modal" id="preface" role="dialog" aria-modal="true" aria-labelledby="pTitle" hidden>
+  <div class="sheet">
+    <button class="close" type="button" data-close aria-label="Close">&times;</button>
+    <p class="kicker">Before you begin</p>
+    <h2 id="pTitle">How long is 4.2 billion years?</h2>
+    <p class="lede">This page draws all of that time as one unbroken line. Every pixel is a thousand years, so the line is 4.2 million pixels long. That is far wider than any screen, so it is wound into a spiral. It starts at the centre in the deep past and ends at the top at the year 0 AD. From there a short straight strip runs right to today, at one pixel per ten years, which is 100 times more magnified than the spiral.</p>
+    <p>The aim is to show the span of time that we can trace, and to let you see how small a place our own existence takes up in it.</p>
+    <h3>Squeeze it into one day</h3>
+    <p>If 4.2 billion years were a single day ending at midnight today, one second would stand for about 48,600 years.</p>
+    <table class="scale">
+      <thead><tr><th scope="col">Span</th><th scope="col">On a 24-hour clock</th><th scope="col">On this page</th></tr></thead>
+      <tbody>
+        <tr><td>Homo sapiens, 300,000 years</td><td>6 seconds</td><td>300 px</td></tr>
+        <tr><td>Recorded history, about 5,000 years</td><td>0.1 second</td><td>5 px</td></tr>
+        <tr><td>A long human life, 80 years</td><td>1.6 milliseconds</td><td>0.08 px (8 px on the strip)</td></tr>
+      </tbody>
+    </table>
+    <p>Our species fills the last 0.007% of the line. The non-avian dinosaurs lasted more than 550 times longer than we have existed so far.</p>
+    <p class="fine">The line starts 4.2 billion years ago, a round figure inside Earth's age of about 4.54 billion years. Dates for older periods are approximate.</p>
+    <div class="actions">
+      <button class="primary" type="button" id="enter" data-close data-first>Enter the timeline</button>
+      <button type="button" id="toHelp">How to use it</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="help" role="dialog" aria-modal="true" aria-labelledby="hTitle" hidden>
+  <div class="sheet help">
+    <button class="close" type="button" data-close aria-label="Close">&times;</button>
+    <p class="kicker">Help</p>
+    <h2 id="hTitle">How to use the map</h2>
+    <h3>Reading the spiral</h3>
+    <dl>
+      <dt>Start</dt><dd>The line begins at the centre, 4.2 billion years ago, and winds outward. Later times sit further from the centre.</dd>
+      <dt>End</dt><dd>The spiral ends at the top, at the year 0 AD. A straight strip then runs to the right, to today, with one pixel for every ten years. That is 100 times more magnified than the spiral. Hover the magnifier at its right end for a reminder.</dd>
+      <dt>Colours</dt><dd><span class="swatch"></span>White is the timeline. <span class="swatch g"></span>Gold is the period you picked.</dd>
+      <dt>Scale</dt><dd>The bar at the top left shows how many years a stretch of screen covers at the current zoom. Grey labels along the line mark years ago.</dd>
+    </dl>
+    <h3>Highlighting a period</h3>
+    <dl>
+      <dt>Dropdown</dt><dd>Choose a period under "Highlight a period". Its stretch of the line turns gold, and the card at the bottom gives its dates, duration and share of the whole timeline.</dd>
+      <dt>Short periods</dt><dd>Some are only a few pixels long at full view. The map moves in to show them and rings the spot in gold.</dd>
+      <dt>Zoom to period</dt><dd>Fits the highlighted period on screen.</dd>
+      <dt>Whole spiral</dt><dd>Returns to the full view.</dd>
+      <dt>Modern years</dt><dd>Jumps to the straight strip from 0 AD to today.</dd>
+    </dl>
+    <h3>Moving around</h3>
+    <dl>
+      <dt>Pan</dt><dd>Drag the map.</dd>
+      <dt>Zoom</dt><dd>Scroll the wheel, pinch on a touch screen, or use the + and &minus; buttons.</dd>
+      <dt>Read a date</dt><dd>Move over the line, or tap it, to see the approximate date at that point. It appears at the top left.</dd>
+      <dt>Keyboard</dt><dd>Click the map, then use <kbd>&larr;</kbd><kbd>&rarr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd> to pan, <kbd>+</kbd> and <kbd>&minus;</kbd> to zoom, and <kbd>0</kbd> for the whole spiral.</dd>
+    </dl>
+    <div class="actions">
+      <button class="primary" type="button" data-close data-first>Close</button>
+      <button type="button" id="toPreface">Read the preface</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ---------- Timeline model: constants and pure geometry ---------- */
+const T0 = 4.2e9;            // years before today at the start of the line
+const NOW = 2026;            // calendar year treated as "today"
+const YR_PER_PX = 1000;      // spiral: 1 px = 1 millennium
+const YR_PER_PX_TAIL = 10;   // straight tail from 0 AD: 1 px = 1 decade
+const PITCH = 7;             // distance between neighbouring turns, px
+const LINE_W = 2.5;          // line thickness, px
+const R0 = 14;               // radius where the spiral starts, px
+const TAU = Math.PI * 2;
+const B = PITCH / TAU;
+const LS = (T0 - NOW) / YR_PER_PX;   // spiral length, px
+const LT = NOW / YR_PER_PX_TAIL;     // straight tail length, px
+
+// Arc length of an Archimedean spiral r = R0 + B*theta, as a function of radius u
+const F = u => (u * Math.sqrt(u * u + B * B) + B * B * Math.asinh(u / B)) / (2 * B);
+const F0 = F(R0);
+function uAt(s) {
+  let u = Math.sqrt(R0 * R0 + 2 * B * s);
+  for (let i = 0; i < 8; i++) u -= (F(u) - F0 - s) * B / Math.sqrt(u * u + B * B);
+  return u;
+}
+const U_END = uAt(LS);
+const TH_END = (U_END - R0) / B;
+// Rotate the spiral so its last point sits at 12 o'clock and the line leaves it heading right
+const PHI = -Math.PI / 2 + Math.atan2(B, U_END) - TH_END;
+const END_X = U_END * Math.cos(TH_END + PHI);
+const END_Y = U_END * Math.sin(TH_END + PHI);
+
+function sFromYa(ya) { return ya >= NOW ? (T0 - ya) / YR_PER_PX : LS + (NOW - ya) / YR_PER_PX_TAIL; }
+function yaFromS(s) { return s <= LS ? T0 - s * YR_PER_PX : NOW - (s - LS) * YR_PER_PX_TAIL; }
+function pos(s) {
+  if (s <= LS) { const u = uAt(s), a = (u - R0) / B + PHI; return [u * Math.cos(a), u * Math.sin(a)]; }
+  return [END_X + (s - LS), END_Y];
+}
+// Nearest point of the spiral to a world point: { s, d } or null
+function nearestSpiral(wx, wy) {
+  const r = Math.hypot(wx, wy);
+  let a = Math.atan2(wy, wx) - PHI;
+  a = ((a % TAU) + TAU) % TAU;
+  let k = Math.max(0, Math.round((r - R0 - B * a) / PITCH));
+  let u = R0 + B * (a + TAU * k);
+  while (k > 0 && u > U_END) { k--; u = R0 + B * (a + TAU * k); }
+  if (u > U_END || u < R0) return null;
+  return { s: F(u) - F0, d: Math.abs(r - u) };
+}
+
+/* ---------- Periods ---------- */
+// a = older boundary, b = newer boundary, both in years before today. cal: show as BC/AD.
+const ad = y => NOW - y;
+const GROUPS = [
+  { label: "The magnified strip", items: [
+    { n: "Common Era", a: NOW, b: 0, cal: 1, note: "The years from 0 AD to today, drawn on the magnified strip at 1 px = 10 years. Everything on the strip is 100 times larger than in the spiral." }
+  ]},
+  { label: "Earth: eons, eras, epochs", items: [
+    { n: "Hadean eon", a: 4.2e9, b: 4.0e9, note: "Molten, battered early Earth. Only its last 200 million years fall inside this 4.2-billion-year timeline." },
+    { n: "Archean eon", a: 4.0e9, b: 2.5e9, note: "The first continents and the earliest traces of life, under an atmosphere with almost no oxygen." },
+    { n: "Proterozoic eon", a: 2.5e9, b: 5.39e8, note: "Oxygen builds up, complex cells evolve and the first multicellular life appears." },
+    { n: "Paleozoic era", a: 5.39e8, b: 2.52e8, note: "Animals diversify: fish, land plants, insects and the first land vertebrates." },
+    { n: "Mesozoic era", a: 2.52e8, b: 6.6e7, note: "The age of reptiles. Dinosaurs dominate, and birds and flowering plants appear." },
+    { n: "Cenozoic era", a: 6.6e7, b: 0, note: "The age of mammals, from the end of the non-avian dinosaurs to today." },
+    { n: "Quaternary period", a: 2.58e6, b: 0, note: "The ice ages and the rise of modern humans." },
+    { n: "Pleistocene epoch", a: 2.58e6, b: 11700, note: "Repeated glacial cycles. Homo sapiens evolves and spreads across the world." },
+    { n: "Holocene epoch", a: 11700, b: 0, note: "The warm period since the last glaciation. It contains all of farming and civilization." }
+  ]},
+  { label: "Life on Earth", items: [
+    { n: "Microbial life only", a: 3.8e9, b: 5.75e8, note: "Single-celled organisms alone, from the earliest traces of life until the first complex animals." },
+    { n: "Great Oxidation Event", a: 2.4e9, b: 2.0e9, note: "Photosynthesizing microbes raise the oxygen level of the atmosphere for the first time." },
+    { n: "The Boring Billion", a: 1.8e9, b: 8.0e8, note: "A long, stable stretch with little change in climate or life." },
+    { n: "Snowball Earth", a: 7.2e8, b: 6.35e8, note: "The Cryogenian period, when ice may have reached the tropics." },
+    { n: "Cambrian explosion", a: 5.39e8, b: 5.15e8, note: "Most major animal groups appear in the fossil record." },
+    { n: "Carboniferous coal forests", a: 3.59e8, b: 2.99e8, note: "Swamp forests that formed much of the world's coal." },
+    { n: "End-Permian Great Dying", a: 2.52e8, b: 2.5194e8, note: "The worst mass extinction. Most marine species were lost in roughly 60,000 years." },
+    { n: "Non-avian dinosaurs", a: 2.33e8, b: 6.6e7, note: "From their first appearance to the asteroid impact. Birds are their living descendants." }
+  ]},
+  { label: "Humans", items: [
+    { n: "Hominin lineage", a: 7e6, b: 0, note: "The branch of the family tree that split from the chimpanzee line." },
+    { n: "Genus Homo", a: 2.8e6, b: 0, note: "The human genus, from its earliest known fossils to us." },
+    { n: "Paleolithic (Old Stone Age)", a: 2.6e6, b: 11700, note: "Chipped stone tools, foraging and the control of fire." },
+    { n: "Neanderthals", a: 4e5, b: 4e4, note: "Neanderthals live across Europe and western Asia until about 40,000 years ago." },
+    { n: "Homo sapiens", a: 3e5, b: 0, note: "Anatomically modern humans." },
+    { n: "Last Ice Age", a: 1.15e5, b: 11700, note: "The most recent glacial period, ending as the Holocene begins." }
+  ]},
+  { label: "Civilization", items: [
+    { n: "Neolithic: farming begins", a: ad(-9500), b: ad(-4500), cal: 1, note: "Crops and herd animals, and the first permanent villages." },
+    { n: "Bronze Age", a: ad(-3300), b: ad(-1200), cal: 1, note: "Bronze tools and weapons, early cities and states." },
+    { n: "Recorded history", a: ad(-3200), b: 0, cal: 1, note: "Writing appears in Mesopotamia and Egypt." },
+    { n: "Iron Age", a: ad(-1200), b: ad(-550), cal: 1, note: "Iron replaces bronze for tools and weapons around the Near East and Mediterranean." },
+    { n: "Classical antiquity", a: ad(-800), b: ad(476), cal: 1, note: "The Greek and Roman worlds." },
+    { n: "Middle Ages", a: ad(500), b: ad(1500), cal: 1, note: "Europe between antiquity and the early modern period." },
+    { n: "Renaissance", a: ad(1400), b: ad(1600), cal: 1, note: "A revival of art, science and learning in Europe." },
+    { n: "Industrial Revolution", a: ad(1760), b: ad(1840), cal: 1, note: "Steam power, factories and mechanized production, starting in Britain." },
+    { n: "World Wars era", a: ad(1914), b: ad(1945), cal: 1, note: "Both world wars and the years between them." },
+    { n: "Space age", a: ad(1957), b: 0, cal: 1, note: "From Sputnik onward." },
+    { n: "Digital era", a: ad(1970), b: 0, cal: 1, note: "Microprocessors, personal computers and software everywhere." },
+    { n: "Internet era", a: ad(1991), b: 0, cal: 1, note: "The World Wide Web goes public and the internet reaches billions of people." },
+    { n: "AI era", a: ad(2012), b: 0, cal: 1, note: "Deep learning and large AI models." }
+  ]}
+];
+const EVENTS = [];
+GROUPS.forEach(g => g.items.forEach(e => { e.s1 = sFromYa(e.a); e.s2 = sFromYa(e.b); e.id = EVENTS.length; EVENTS.push(e); }));
+
+/* ---------- Formatting ---------- */
+const trim = x => parseFloat(x.toFixed(2)).toString();
+function num(n) {
+  if (n >= 1e9) return trim(n / 1e9) + " billion";
+  if (n >= 1e6) return trim(n / 1e6) + " million";
+  return Math.round(n).toLocaleString("en-US");
+}
+const years = n => num(n) + " years";
+function calLabel(ya) {
+  const y = Math.round(NOW - ya);
+  return y < 0 ? (-y).toLocaleString("en-US") + " BC" : y + " AD";
+}
+function rangeText(e) {
+  if (e.cal) return calLabel(e.a) + " → " + (e.b === 0 ? "today" : calLabel(e.b));
+  return e.b === 0 ? num(e.a) + " years ago → today" : num(e.a) + " → " + num(e.b) + " years ago";
+}
+function shareText(dur) {
+  const p = dur / T0 * 100;
+  if (p >= 1) return p.toFixed(1) + "%";
+  if (p >= 0.01) return p.toFixed(2) + "%";
+  if (p >= 0.0001) return p.toFixed(4) + "%";
+  return "<0.0001%";
+}
+function lenText(e) {
+  const len = e.s2 - e.s1;
+  const t = len >= 100 ? Math.round(len).toLocaleString("en-US") : len >= 10 ? len.toFixed(1) : len.toFixed(2);
+  if (e.s1 >= LS) return t + " px (1 px = 10 yrs)";
+  if (e.s2 > LS) return t + " px (crosses the scale change)";
+  return t + " px";
+}
+function sig3(n) { const p = Math.pow(10, Math.floor(Math.log10(n)) - 2); return Math.round(n / p) * p; }
+function pointLabel(s) {
+  if (s > LS) {
+    const y = Math.round((s - LS) * YR_PER_PX_TAIL / 10) * 10;
+    if (y >= NOW - 5) return "today (" + NOW + " AD)";
+    return "about " + y + " AD (" + (NOW - y) + " years ago)";
+  }
+  const ya = Math.max(1, yaFromS(s));
+  if (ya >= 12000) return "about " + num(sig3(ya)) + " years ago";
+  const bc = Math.round((ya - NOW) / 10) * 10;
+  return "about " + (bc > 0 ? bc.toLocaleString("en-US") + " BC" : Math.max(0, -bc) + " AD") + " (" + num(sig3(ya)) + " years ago)";
+}
+function markLabel(ya) {
+  if (ya >= 1e9) return trim(ya / 1e9) + " B yrs ago";
+  if (ya >= 1e6) return trim(ya / 1e6) + " M yrs ago";
+  return trim(ya / 1e3) + " k yrs ago";
+}
+const MARKS = [4.2e9, 4e9, 3.5e9, 3e9, 2.5e9, 2e9, 1.5e9, 1e9, 7.5e8, 5e8, 2.5e8, 1e8, 6.6e7, 1e7, 1e6, 1e5, 1e4]
+  .map(ya => ({ s: sFromYa(ya), text: markLabel(ya) }));
+
+/* ---------- View state and drawing ---------- */
+const $ = id => document.getElementById(id);
+const stage = $("stage"), base = $("base"), over = $("over");
+const bctx = base.getContext("2d"), octx = over.getContext("2d");
+const css = getComputedStyle(document.documentElement);
+const tok = n => css.getPropertyValue(n).trim();
+const WHITE = tok("--line"), GOLD = tok("--gold"), INK = tok("--ink");
+const FONT_DATA = tok("--font-data"), FONT_DISPLAY = tok("--font-display");
+const GOLD_GLOW = "rgba(242,181,58,0.28)";
+const STRIP_FILL = "rgba(147,160,192,0.10)", STRIP_EDGE = "rgba(147,160,192,0.5)";
+const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+let W = 0, H = 0, dpr = 1, fitted = false;
+const view = { x: 0, y: 0, z: 0.1 };
+let MIN_Z = 0.05;
+const MAX_Z = 32;
+const D = U_END + 30;
+let selected = null;
+let hover = null;
+
+const sx = x => (x - view.x) * view.z + W / 2;
+const sy = y => (y - view.y) * view.z + H / 2;
+
+// Build the spiral between path distances s1 and s2, skipping what is off screen
+function spiralPath(ctx, s1, s2) {
+  if (s2 <= s1) return false;
+  const z = view.z;
+  const x0 = view.x - W / 2 / z, x1 = view.x + W / 2 / z, y0 = view.y - H / 2 / z, y1 = view.y + H / 2 / z;
+  const dx = x0 > 0 ? x0 : x1 < 0 ? -x1 : 0, dy = y0 > 0 ? y0 : y1 < 0 ? -y1 : 0;
+  const dmin = Math.hypot(dx, dy);
+  const dmax = Math.hypot(Math.max(Math.abs(x0), Math.abs(x1)), Math.max(Math.abs(y0), Math.abs(y1)));
+  const uLo = Math.max(uAt(s1), dmin - 2 * PITCH), uHi = Math.min(uAt(s2), dmax + 2 * PITCH);
+  if (uLo >= uHi) return false;
+  const tol = 0.35 / z;
+  const m = 0.3 * Math.min(W, H) + 24;
+  const maxStep = 0.3 * Math.min(W, H) / z;
+  const thHi = (uHi - R0) / B;
+  let th = (uLo - R0) / B, pen = false, any = false;
+  ctx.beginPath();
+  for (;;) {
+    const last = th >= thHi;
+    if (last) th = thHi;
+    const u = R0 + B * th, a = th + PHI;
+    const px = sx(u * Math.cos(a)), py = sy(u * Math.sin(a));
+    if (px > -m && px < W + m && py > -m && py < H + m) {
+      if (pen) ctx.lineTo(px, py); else { ctx.moveTo(px, py); pen = true; }
+      any = true;
+    } else pen = false;
+    if (last) break;
+    const uu = Math.max(u, 1);
+    th += Math.min(0.5, Math.max(0.002, 2 * Math.sqrt(2 * tol / uu)), maxStep / uu);
+  }
+  return any;
+}
+
+function strokeRange(ctx, s1, s2, w, color, cap) {
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = cap || "butt"; ctx.lineJoin = "round";
+  if (s1 < LS && spiralPath(ctx, Math.max(0, s1), Math.min(LS, s2))) ctx.stroke();
+  if (s2 > LS) {
+    const t1 = Math.max(s1, LS), t2 = Math.min(s2, LS + LT);
+    ctx.beginPath();
+    ctx.moveTo(sx(END_X + (t1 - LS)), sy(END_Y));
+    ctx.lineTo(sx(END_X + (t2 - LS)), sy(END_Y));
+    ctx.stroke();
+  }
+}
+
+function renderBase() {
+  bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  bctx.clearRect(0, 0, W, H);
+  const z = view.z;
+  strokeRange(bctx, 0, LS + LT, Math.max(LINE_W * z, 0.8), WHITE);
+  if (selected) {
+    const core = Math.max(LINE_W * z, 2.4);
+    strokeRange(bctx, selected.s1, selected.s2, core + 7, GOLD_GLOW, "round");
+    strokeRange(bctx, selected.s1, selected.s2, core, GOLD, "butt");
+  }
+}
+
+function halo(ctx, text, x, y, fill, width) {
+  ctx.lineJoin = "round"; ctx.lineWidth = width || 4; ctx.strokeStyle = INK;
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = fill; ctx.fillText(text, x, y);
+}
+
+function renderOver() {
+  const ctx = octx, z = view.z;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.textBaseline = "middle";
+  const placed = [];
+  const free = (x, y, d) => placed.every(p => Math.hypot(p.x - x, p.y - y) > d);
+  const inView = (x, y) => x > 8 && x < W - 8 && y > 8 && y < H - 8;
+
+  // Horizontal strip: 0 AD to today at 1 px = 10 years, labelled in calendar years
+  const tx0 = sx(END_X), tx1 = sx(END_X + LT), ty = sy(END_Y), Ls = tx1 - tx0;
+  if (tx1 > -80 && tx0 < W + 80 && ty > -80 && ty < H + 80) {
+    ctx.font = "11px " + FONT_DATA;
+    const pad = Math.max(LINE_W * z, 0.8) / 2;
+    if (Ls >= 36) {
+      ctx.beginPath(); ctx.rect(tx0 - 10, ty - pad - 30, Ls + 20, 36 + 2 * pad);
+      ctx.fillStyle = STRIP_FILL; ctx.fill();
+      ctx.strokeStyle = STRIP_EDGE; ctx.lineWidth = 1; ctx.stroke();
+    }
+    const px100 = 10 * z;
+    const step = px100 >= 56 ? 100 : px100 * 5 >= 56 ? 500 : px100 * 10 >= 56 ? 1000 : 0;
+    ctx.strokeStyle = "rgba(241,244,250,0.6)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (px100 >= 5) {
+      for (let y = 0; y <= 2000; y += 100) {
+        const px = sx(END_X + y / 10), len = y % 500 === 0 ? 12 : 7;
+        ctx.moveTo(px, ty - pad); ctx.lineTo(px, ty - pad - len);
+      }
+    }
+    if (Ls >= 36) { ctx.moveTo(tx0, ty - pad); ctx.lineTo(tx0, ty - pad - 18); }
+    ctx.stroke();
+    const labY = ty - pad - 23;
+    const lab = (s, px, col) => {
+      if (px > -40 && px < W + 40 && labY > -10 && labY < H + 10) { ctx.textAlign = "center"; halo(ctx, s, px, labY, col || "#e6eaf4"); }
+    };
+    if (step) {
+      for (let y = 0; y <= 2000; y += step) { const px = sx(END_X + y / 10); if (Math.abs(px - tx1) > 50) lab(y + " AD", px); }
+      lab("now", tx1, GOLD);
+    } else if (Ls >= 90) { lab("0 AD", tx0); lab("now", tx1, GOLD); }
+    else lab("0 AD to now", (tx0 + tx1) / 2);
+    placed.push({ x: tx0, y: ty }, { x: tx1, y: ty });
+  }
+
+  // Selected period: ring for tiny stretches, end dots, name label
+  if (selected) {
+    const len = (selected.s2 - selected.s1) * z;
+    const sm = (selected.s1 + selected.s2) / 2;
+    const [mx, my] = pos(sm), px = sx(mx), py = sy(my);
+    if (len < 24 && inView(px, py)) {
+      ctx.beginPath(); ctx.arc(px, py, 13, 0, TAU); ctx.strokeStyle = GOLD; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    if (len >= 30) for (const s of [selected.s1, selected.s2]) {
+      const [ex, ey] = pos(s), qx = sx(ex), qy = sy(ey);
+      if (!inView(qx, qy)) continue;
+      ctx.beginPath(); ctx.arc(qx, qy, 3.5, 0, TAU); ctx.fillStyle = GOLD; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = INK; ctx.stroke();
+    }
+    if (inView(px, py)) {
+      const onStrip = sm > LS;
+      const r = Math.hypot(mx, my) || 1;
+      const nx = onStrip ? 0 : mx / r, ny = onStrip ? -1 : my / r;
+      ctx.font = "italic 18px " + FONT_DISPLAY;
+      const w = ctx.measureText(selected.n).width, off = onStrip ? 46 : len < 16 ? 24 : 16;
+      let lx, al;
+      if (onStrip) { lx = Math.max(8 + w / 2, Math.min(W - 8 - w / 2, px)); al = "center"; }
+      else {
+        const right = nx >= 0;
+        lx = px + nx * off + (right ? 3 : -3);
+        lx = right ? Math.min(lx, W - 8 - w) : Math.max(lx, 8 + w);
+        al = right ? "left" : "right";
+      }
+      const ly = Math.max(14, Math.min(H - 14, py + ny * off));
+      ctx.textAlign = al;
+      halo(ctx, selected.n, lx, ly, GOLD, 5);
+      placed.push({ x: px, y: py });
+    }
+  }
+
+  // Landmarks along the spiral, thinned so labels never collide
+  ctx.font = "11px " + FONT_DATA;
+  for (const m of MARKS) {
+    const [mx, my] = pos(m.s), px = sx(mx), py = sy(my);
+    if (!inView(px, py) || !free(px, py, 84)) continue;
+    const r = Math.hypot(mx, my) || 1, nx = mx / r, ny = my / r;
+    const lx = px + nx * 16, ly = py + ny * 16, right = nx >= 0;
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(lx, ly);
+    ctx.strokeStyle = "rgba(147,160,192,0.9)"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(px, py, 2.5, 0, TAU); ctx.fillStyle = WHITE; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.textAlign = right ? "left" : "right";
+    halo(ctx, m.text, lx + (right ? 4 : -4), ly, "#93a0c0", 4);
+    placed.push({ x: px, y: py });
+  }
+
+  // Pointer marker
+  if (hover) {
+    const [hx, hy] = pos(hover.s);
+    ctx.beginPath(); ctx.arc(sx(hx), sy(hy), 7, 0, TAU);
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+}
+
+function updateHud() {
+  const target = 90 / view.z;
+  const b10 = Math.pow(10, Math.floor(Math.log10(target)));
+  let nice = b10;
+  for (const k of [2, 5, 10]) if (k * b10 <= target) nice = k * b10;
+  $("scaleBar").style.width = Math.round(nice * view.z) + "px";
+  $("scaleText").textContent = trim(nice) + " px = " + years(nice * YR_PER_PX) + " (spiral)";
+  positionMag();
+}
+
+/* ---------- Render scheduling and camera ---------- */
+let dirtyBase = false, dirtyOver = false, raf = 0, anim = 0;
+function flush() {
+  if (dirtyBase) { renderBase(); dirtyBase = false; }
+  if (dirtyOver) { renderOver(); updateHud(); dirtyOver = false; }
+}
+function requestRender(withBase) {
+  if (withBase !== false) dirtyBase = true;
+  dirtyOver = true;
+  if (!raf) raf = requestAnimationFrame(() => { raf = 0; flush(); });
+}
+function renderNow() { dirtyBase = dirtyOver = true; flush(); }
+
+function clampView() {
+  const lim = U_END + 300;
+  view.x = Math.max(-lim, Math.min(lim, view.x));
+  view.y = Math.max(-lim, Math.min(lim, view.y));
+  view.z = Math.max(MIN_Z, Math.min(MAX_Z, view.z));
+}
+
+function freeArea() {
+  const card = $("card"), cw = card.offsetWidth, ch = card.offsetHeight;
+  const side = W >= 820 && W >= 1.25 * H;
+  return side ? { l: cw + 40, t: 48, r: 0, b: 8 } : { l: 0, t: 64, r: 0, b: ch + 28 };
+}
+function boxView(x0, y0, x1, y1, pad) {
+  const f = freeArea();
+  const aw = Math.max(80, W - f.l - f.r), ah = Math.max(80, H - f.t - f.b);
+  const z = Math.min(MAX_Z, Math.min(aw / Math.max(x1 - x0, 1e-6), ah / Math.max(y1 - y0, 1e-6)) * pad);
+  const fx = f.l + aw / 2, fy = f.t + ah / 2;
+  return { x: (x0 + x1) / 2 + (W / 2 - fx) / z, y: (y0 + y1) / 2 + (H / 2 - fy) / z, z };
+}
+function periodBox(e) {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (let i = 0; i <= 240; i++) {
+    const [x, y] = pos(e.s1 + (e.s2 - e.s1) * i / 240);
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const hw = Math.max((x1 - x0) / 2 + LINE_W * 2, 24), hh = Math.max((y1 - y0) / 2 + LINE_W * 2, 24);
+  return [cx - hw, cy - hh, cx + hw, cy + hh];
+}
+const wholeView = () => boxView(-D, -D, D, D, 0.96);
+const modernView = () => boxView(END_X - 40, END_Y - 70, END_X + LT + 60, END_Y + 40, 0.95);
+const periodView = e => boxView(...periodBox(e), 0.85);
+
+function flyTo(t, ms) {
+  cancelAnimationFrame(anim);
+  if (reduceMotion || !ms) { Object.assign(view, t); clampView(); renderNow(); return; }
+  const f = { x: view.x, y: view.y, lz: Math.log(view.z) }, lz1 = Math.log(t.z), t0 = performance.now();
+  const step = now => {
+    const k = Math.min(1, (now - t0) / ms);
+    const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    view.x = f.x + (t.x - f.x) * e; view.y = f.y + (t.y - f.y) * e;
+    view.z = Math.exp(f.lz + (lz1 - f.lz) * e);
+    clampView(); renderNow();
+    if (k < 1) anim = requestAnimationFrame(step);
+  };
+  anim = requestAnimationFrame(step);
+}
+
+function resize() {
+  const r = stage.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  for (const c of [base, over]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+  MIN_Z = wholeView().z * 0.5;
+  if (!fitted && W > 200 && H > 200) { Object.assign(view, wholeView()); fitted = true; }
+  clampView(); renderNow();
+}
+
+/* ---------- Controls and interaction ---------- */
+const sel = $("period");
+(function fillSelect() {
+  const none = document.createElement("option");
+  none.value = "-1"; none.textContent = "No period highlighted";
+  sel.appendChild(none);
+  GROUPS.forEach(g => {
+    const og = document.createElement("optgroup");
+    og.label = g.label;
+    g.items.forEach(e => {
+      const o = document.createElement("option");
+      o.value = String(e.id); o.textContent = e.n;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+})();
+
+function showCard() {
+  const e = selected;
+  $("card").classList.toggle("none", !e);
+  $("zoomPeriod").disabled = !e;
+  if (!e) {
+    $("cName").textContent = "Nothing highlighted";
+    $("cRange").textContent = "Pick a period above to turn its stretch of the line gold.";
+    return;
+  }
+  const dur = e.a - e.b;
+  $("cName").textContent = e.n;
+  $("cRange").textContent = rangeText(e);
+  $("cDur").textContent = years(dur);
+  $("cShare").textContent = shareText(dur);
+  $("cLen").textContent = lenText(e);
+  $("cNote").textContent = e.note;
+}
+
+function choose(e, fly) {
+  selected = e || null;
+  sel.value = e ? String(e.id) : "-1";
+  showCard();
+  requestRender();
+  if (!e || fly === false) return;
+  const [mx, my] = pos((e.s1 + e.s2) / 2), px = sx(mx), py = sy(my);
+  const off = px < 0 || px > W || py < 0 || py > H;
+  // Bring tiny or off-screen periods into view so the gold is never missed
+  if ((e.s2 - e.s1) * view.z < 10 || off) flyTo(periodView(e), 700);
+}
+sel.addEventListener("change", () => choose(EVENTS[+sel.value] || null, true));
+$("zoomPeriod").addEventListener("click", () => { if (selected) flyTo(periodView(selected), 700); });
+$("fitAll").addEventListener("click", () => flyTo(wholeView(), 700));
+$("fitModern").addEventListener("click", () => flyTo(modernView(), 700));
+
+function zoomAt(px, py, f) {
+  const z = Math.max(MIN_Z, Math.min(MAX_Z, view.z * f));
+  const wx = (px - W / 2) / view.z + view.x, wy = (py - H / 2) / view.z + view.y;
+  view.z = z; view.x = wx - (px - W / 2) / z; view.y = wy - (py - H / 2) / z;
+  clampView(); requestRender();
+}
+$("zin").addEventListener("click", () => { cancelAnimationFrame(anim); zoomAt(W / 2, H / 2, 1.6); });
+$("zout").addEventListener("click", () => { cancelAnimationFrame(anim); zoomAt(W / 2, H / 2, 1 / 1.6); });
+
+stage.addEventListener("wheel", e => {
+  e.preventDefault();
+  cancelAnimationFrame(anim);
+  const r = stage.getBoundingClientRect();
+  const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0018)));
+}, { passive: false });
+
+// Find the nearest point of the line to a screen position and report its date
+function probe(px, py) {
+  const z = view.z;
+  const wx = (px - W / 2) / z + view.x, wy = (py - H / 2) / z + view.y;
+  let best = null;
+  const n = nearestSpiral(wx, wy);
+  if (n && n.d * z < 14) best = { s: n.s, d: n.d * z };
+  const dyT = Math.abs(wy - END_Y) * z, t = wx - END_X;
+  if (t >= -2 && t <= LT + 2 && dyT < 14 && (!best || dyT < best.d)) {
+    best = { s: LS + Math.max(0, Math.min(LT, t)), d: dyT };
+  }
+  hover = best;
+  $("pointText").textContent = best ? "Pointing at " + pointLabel(best.s) : "";
+  requestRender(false);
+}
+
+const ptrs = new Map();
+let lastPinch = null, moved = 0;
+const pinchState = () => {
+  const [a, b] = [...ptrs.values()];
+  return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 };
+};
+stage.addEventListener("pointerdown", e => {
+  if (e.target.closest(".card, .zoomctl, .mag")) return;
+  stage.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  moved = 0; cancelAnimationFrame(anim);
+  if (ptrs.size === 2) lastPinch = pinchState();
+  stage.classList.add("drag");
+});
+stage.addEventListener("pointermove", e => {
+  const r = stage.getBoundingClientRect();
+  const p = ptrs.get(e.pointerId);
+  if (!p) { if (e.pointerType === "mouse") probe(e.clientX - r.left, e.clientY - r.top); return; }
+  if (ptrs.size === 1) {
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    moved += Math.abs(dx) + Math.abs(dy);
+    view.x -= dx / view.z; view.y -= dy / view.z;
+    clampView(); requestRender();
+    p.x = e.clientX; p.y = e.clientY;
+  } else if (ptrs.size === 2) {
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const st = pinchState();
+    if (lastPinch) {
+      zoomAt(st.cx - r.left, st.cy - r.top, st.d / lastPinch.d);
+      view.x -= (st.cx - lastPinch.cx) / view.z; view.y -= (st.cy - lastPinch.cy) / view.z;
+      clampView(); requestRender();
+    }
+    lastPinch = st; moved += 10;
+  }
+});
+function endPointer(e) {
+  if (!ptrs.has(e.pointerId)) return;
+  const tap = ptrs.size === 1 && moved < 6 && e.type === "pointerup";
+  ptrs.delete(e.pointerId); lastPinch = null;
+  if (!ptrs.size) stage.classList.remove("drag");
+  if (tap) { const r = stage.getBoundingClientRect(); probe(e.clientX - r.left, e.clientY - r.top); }
+}
+stage.addEventListener("pointerup", endPointer);
+stage.addEventListener("pointercancel", endPointer);
+stage.addEventListener("pointerleave", e => {
+  if (e.pointerType === "mouse" && !ptrs.size) { hover = null; $("pointText").textContent = ""; requestRender(false); }
+});
+
+stage.addEventListener("keydown", e => {
+  const pan = 60 / view.z;
+  if (e.key === "+" || e.key === "=") zoomAt(W / 2, H / 2, 1.4);
+  else if (e.key === "-" || e.key === "_") zoomAt(W / 2, H / 2, 1 / 1.4);
+  else if (e.key === "0") flyTo(wholeView(), 500);
+  else if (e.key === "ArrowLeft") { view.x -= pan; clampView(); requestRender(); }
+  else if (e.key === "ArrowRight") { view.x += pan; clampView(); requestRender(); }
+  else if (e.key === "ArrowUp") { view.y -= pan; clampView(); requestRender(); }
+  else if (e.key === "ArrowDown") { view.y += pan; clampView(); requestRender(); }
+  else return;
+  e.preventDefault();
+});
+
+/* ---------- Preface and help popups ---------- */
+const preface = $("preface"), help = $("help");
+const SEEN_KEY = "deep-time-preface-seen";
+let lastFocus = null;
+const prefaceSeen = () => { try { return localStorage.getItem(SEEN_KEY) === "1"; } catch (e) { return false; } };
+const markSeen = () => { try { localStorage.setItem(SEEN_KEY, "1"); } catch (e) {} };
+function openModal(m) {
+  lastFocus = document.activeElement;
+  m.hidden = false;
+  const first = m.querySelector("[data-first]");
+  if (first) first.focus();
+}
+function closeModal(m) {
+  m.hidden = true;
+  if (m === preface) markSeen();
+  if (lastFocus && lastFocus.focus) lastFocus.focus();
+}
+for (const m of [preface, help]) {
+  m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) closeModal(m); });
+}
+$("aboutBtn").addEventListener("click", () => openModal(preface));
+$("helpBtn").addEventListener("click", () => openModal(help));
+$("toHelp").addEventListener("click", () => { closeModal(preface); openModal(help); });
+$("toPreface").addEventListener("click", () => { closeModal(help); openModal(preface); });
+document.addEventListener("keydown", e => {
+  const m = !help.hidden ? help : !preface.hidden ? preface : null;
+  if (!m) return;
+  if (e.key === "Escape") { e.preventDefault(); closeModal(m); return; }
+  if (e.key !== "Tab") return;
+  const f = [...m.querySelectorAll("button")].filter(b => !b.disabled);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (!m.contains(document.activeElement) || (e.shiftKey && document.activeElement === first)) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+/* ---------- Magnifier note on the strip ---------- */
+function positionMag() {
+  const mag = $("mag"), tip = $("magtip");
+  const tx0 = sx(END_X), tx1 = sx(END_X + LT), ty = sy(END_Y);
+  const vis = ty > 20 && ty < H - 20 && tx1 > -10 && tx0 < W + 10;
+  mag.hidden = !vis;
+  if (!vis) { tip.hidden = true; return; }
+  const mw = mag.offsetWidth, mh = mag.offsetHeight;
+  const x = Math.max(8, Math.min(tx1 + 16, W - mw - 8)), y = ty - mh / 2;
+  mag.style.transform = "translate(" + x + "px," + y + "px)";
+  if (!tip.hidden) {
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    const lx = Math.max(8, Math.min(x + mw / 2 - tw / 2, W - tw - 8));
+    let ly = y - th - 10;
+    if (ly < 8) ly = y + mh + 10;
+    tip.style.transform = "translate(" + lx + "px," + ly + "px)";
+  }
+}
+function showTip(on) {
+  $("magtip").hidden = !on;
+  $("mag").setAttribute("aria-expanded", on ? "true" : "false");
+  if (on) positionMag();
+}
+const magBtn = $("mag");
+magBtn.addEventListener("mouseenter", () => showTip(true));
+magBtn.addEventListener("mouseleave", () => showTip(false));
+magBtn.addEventListener("focus", () => showTip(true));
+magBtn.addEventListener("blur", () => showTip(false));
+magBtn.addEventListener("click", () => showTip(true));
+document.addEventListener("pointerdown", e => { if (!e.target.closest("#mag")) showTip(false); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") showTip(false); });
+
+/* ---------- Start ---------- */
+choose(EVENTS.find(e => e.n === "Common Era"), false);
+new ResizeObserver(resize).observe(stage);
+resize();
+if (!prefaceSeen()) openModal(preface);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => requestRender());
+</script>
+</body>
+</html>
